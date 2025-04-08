@@ -4,6 +4,8 @@
 /// This code is the control code for MARK3 ships(MARK3 original ver to MARK3).
 /// Vessel configuration: 2 thrusters, physical emergency power supply, NX8 receiver, os1
 /// 
+/// NX6 controller
+
 
 #include <Servo.h>
 #define RECV_mode 2  // channel 5. Auto & RC mode
