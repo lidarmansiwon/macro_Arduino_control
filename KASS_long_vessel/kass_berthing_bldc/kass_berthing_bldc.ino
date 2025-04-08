@@ -1,30 +1,30 @@
-/// 2024.05.02 
-/// Author: SIWON, SUNHYUCK, SUNGHYEON
-/// This code is the control code for MAST_2 ships.
-/// Vessel configuration: 2 thrusters, LED, relay emergency power system, orin_no.2, 2 servo motor, new receiver
-
 #include <Servo.h>
 #include <Adafruit_NeoPixel.h>
 
 // Define Reciver pin
 
-#define RECV_btn 3   // channel 5. emergency on&off
-#define RECV_mode 2  // channel 1. Auto & RC mode
-#define RECV_PWM1 12 // channel 2. servo motor
-#define RECV_PWM2 13 // channel 3. thruster
+#define RECV_btn 2  //ch
+#define RECV_mode 3 //ch3
+#define RECV_PWM1 4 //ch4
+#define RECV_PWM2 9 //ch1
 
 // Define LED Status
-#define LED_Pin 6
-#define NUMPIXELS 100
+#define LED_Pin 13
+#define NUMPIXELS 35
 Adafruit_NeoPixel pixels(NUMPIXELS, LED_Pin, NEO_GRB + NEO_KHZ800);
 // Define motor pin
-byte Servo_pin1 = 4; //port
-byte Servo_pin2 = 5; //stbd
+byte Servo_pin1 = 8;
+byte Servo_pin2 = 7;
 
-byte Thr_pin1 = 8; //port
-byte Thr_pin2 = 9; //stbd
+byte bldc1_pin = 5 ;
+byte bldc2_pin = 6;
 
-#define Relay_1 11
+
+byte Thr_pin = 10;
+
+
+int Relay_1 = 11;
+int Relay_2 = 12;
 
 uint32_t redColor = pixels.Color(255, 0, 0);       // 빨간색
 uint32_t greenColor = pixels.Color(0, 255, 0);     // 녹색
@@ -33,42 +33,42 @@ uint32_t yellowColor = pixels.Color(255, 255, 0);  // 노란색
 
 String DataToESC;    //ESC에 전달할 PWM
 String DataTOSend;   //아두이노가 보낼 신호
-String RecieveData;  //아두이노가 받은 PWM
+String RecieveData;  //아두이노가 받은 PWM 
 String DataFromRC;   // RC수신기에서 보낸 PWM
 int ServoDefalut1 = 90;
 int ServoDefalut2 = 90;
 int Status = 1;  // ROS2 파싱 X
 
-int thr_min = 1250;
-int thr_max = 1750;
-Servo thr1;
-Servo thr2;
+int thr_min = 1100;
+int thr_max = 1900;
+int bldc_min = 1350;
+int bldc_max = 1650;
+Servo thr;
+Servo bldc1;
+Servo bldc2;
 Servo servo1;
 Servo servo2;
-//const float alpha = 0.4;
-//float filter_RC_1 = 0;
-//float filter_RC_2 = 0;
-//float filter_RC_3 = 0;
-//float filter_RC_4 = 0;
+
 void setup() {
   pixels.begin();
-  pixels.setBrightness(15);
+
   pinMode(RECV_btn, INPUT);
   pinMode(RECV_mode, INPUT);
   pinMode(RECV_PWM1, INPUT);
   pinMode(RECV_PWM2, INPUT);
 
-  pinMode(Relay_1, OUTPUT);
-  digitalWrite(Relay_1, HIGH);
-  thr1.attach(Thr_pin1,1100,1900);
-  thr2.attach(Thr_pin2,1100,1900);
+  thr.attach(Thr_pin);
   servo1.attach(Servo_pin1);
   servo2.attach(Servo_pin2);
-  thr2.writeMicroseconds(1500);
-  thr1.writeMicroseconds(1500);
+  thr.writeMicroseconds(1500);
   servo1.write(ServoDefalut1);
   servo2.write(ServoDefalut2);
+  bldc1.attach(bldc1_pin);
+  bldc2.attach(bldc2_pin);
+  bldc1.writeMicroseconds(1500);
+  bldc2.writeMicroseconds(1500);
   delay(1000);
+  
   Serial.begin(57600);
 }
 
@@ -82,7 +82,7 @@ void loop() {
   int count = 2;  // 이동평균필터의 분모
   int avg1, avg2, avg3, avg4;
   while (cnt < count) {
-    sum1 += pulseIn(RECV_btn,  HIGH, 50000);
+    sum1 += pulseIn(RECV_btn, HIGH, 50000);
     sum2 += pulseIn(RECV_mode, HIGH, 50000);
     sum3 += pulseIn(RECV_PWM1, HIGH, 50000);
     sum4 += pulseIn(RECV_PWM2, HIGH, 50000);
@@ -93,10 +93,6 @@ void loop() {
   avg2 = sum2 / count;
   avg3 = sum3 / count;
   avg4 = sum4 / count;
-  //avg1 = alpha * sum1 +(1-alpha) * avg1;
-  //avg2 = alpha * sum2 +(1-alpha) * avg2;
-  //avg3 = alpha * sum3 +(1-alpha) * avg3;
-  //avg4 = alpha * sum4 +(1-alpha) * avg4;
   int a;
   DataFromRC = String(avg1) + "," + String(avg2) + "," + String(avg3) + "," + String(avg4);
   if (avg1 > 1600) {  // 비상정지 모드
@@ -106,22 +102,25 @@ void loop() {
 
 
   } else {
-    if (avg2 < 1600) {
-      a = 2; //setColor()
+    if (avg2 > 1800) {
+      a = 2;
     
     }
     else {
 
-    a = 3; //setColor()
+    a = 3;
     }
   }
   //시리얼 통신으로 데이터 수신
   if (Serial.available() > 0) {
     String RecieveData = Serial.readStringUntil('\n');  // 줄 바꿈 문자('\n')까지 읽음
     // 문자열을 파싱하여 숫자로 변환
-    int value1, value2, value3;
-    sscanf(RecieveData.c_str(), "%d,%d,%d", &value1, &value2, &value3);
+    int value1, value2, value3, value4, value5;
+    sscanf(RecieveData.c_str(), "%d,%d,%d,%d,%d", &value1, &value2, &value3, &value4, &value5);
     value1 = constrain(value1, thr_min, thr_max);
+    value4 = constrain(value4, bldc_min, bldc_max);
+    value5 = constrain(value5, bldc_min, bldc_max);
+    
     if (a == 1) {
       setColor(redColor);
     } else {
@@ -132,36 +131,40 @@ void loop() {
       }
     }
     //setColor(greenColor);
-    thr1.writeMicroseconds(value1);
-    thr2.writeMicroseconds(value1);
+    thr.writeMicroseconds(value1);
     servo1.write(value2 + 90);
     servo2.write(value3 + 90);
-    DataToESC = String(value1) + "," + String(value2) + "," + String(value3);
+    
+    bldc1.writeMicroseconds(value4);
+    bldc2.writeMicroseconds(value5);
+
+    DataToESC = String(value1) + "," + String(value2) + "," + String(value3) + "," + String(value4) + "," + String(value5);
     Status = 1;  //ROS2 파싱중
   } 
   else {
     // 수신된 데이터가 없을 때 기본 PWM 값을 사용
-    avg4 = constrain(avg4, thr_min, thr_max);
-    
+    avg3 = constrain(avg3, thr_min, thr_max);
+    avg4 = constrain(avg4, bldc_min, bldc_max);
+
     if (a == 1) {
       digitalWrite(Relay_1, HIGH);  // LOW가 OPEN 일 경우 LOW로 변경
-      //digitalWrite(Relay_2, HIGH);
+      digitalWrite(Relay_2, HIGH);
       setColor(redColor);
      
     } else {
       digitalWrite(Relay_1, LOW);  // LOW가 OPEN 일 경우 LOW로 변경
-      //digitalWrite(Relay_2, LOW);
+      digitalWrite(Relay_2, LOW);
       setColor(yellowColor);
     }
     //setColor(yellowColor );
-    thr1.writeMicroseconds(avg4);
-    thr2.writeMicroseconds(avg4);
-    avg3 = map(avg3, 1100,1900,-90,90);
-    
+    thr.writeMicroseconds(avg3);
     servo1.write(avg3 + 90);
     servo2.write(avg3 + 90);
     
-    DataToESC = String(1500) + "," + String(ServoDefalut1) + "," + String(ServoDefalut2);
+    bldc1.writeMicroseconds(avg4);
+    bldc2.writeMicroseconds(avg4);
+
+    DataToESC = String(1500) + "," + String(ServoDefalut1) + "," + String(ServoDefalut2) +"," + String(0) + "," + String(0);
     Status = 1;  //ROS2 파싱 X
 
   }
@@ -171,7 +174,9 @@ void loop() {
     DataTOSend = DataToESC + "," + String(Status) + "," + DataFromRC;
     Serial.println(DataTOSend);
   }
+  //delay(100);
 }
+
 // LED에 색상을 설정하는 함수
 void setColor(uint32_t color) {
   for (int i = 0; i < NUMPIXELS; i++) {

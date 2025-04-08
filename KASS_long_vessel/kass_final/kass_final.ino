@@ -9,7 +9,7 @@
 #define RECV_PWM2 9
 
 // Define LED Status
-#define LED_Pin 13
+#define LED_Pin 6
 #define NUMPIXELS 35
 Adafruit_NeoPixel pixels(NUMPIXELS, LED_Pin, NEO_GRB + NEO_KHZ800);
 // Define motor pin
